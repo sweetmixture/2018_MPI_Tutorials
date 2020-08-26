@@ -1,0 +1,101 @@
+/* The aim of tutorial improves the understanding of P to P Communication in MPI environment
+ *
+ * In the processor rank 1, it generates a series of integers and sends it to the processor rank 0 
+ *
+ * In between the send and recv, there must be a buffer to store the sending data
+ *
+ * ,and if the MPI_COMM_TAG and  src-dest are correctly matched, then the recv processor (rank 0) can 
+ * get the data all at once later									*/
+ 
+#include<stdio.h>
+#include<stdlib.h>
+#include<mpi.h>
+
+#define NUM_ITER 5
+#define MPI_BUFFER 10
+
+int main( int argc, char* argv[] )
+{
+	int rank, numtasks, mpi_count;
+
+	FILE* fp = NULL;
+
+	double* tmp_prc_0 = NULL;
+	double* tmp_prc_1 = NULL;
+
+	double* master_buffer = NULL;
+
+	MPI_Init(&argc,&argv);
+	
+	MPI_Comm_rank(MPI_COMM_WORLD,&rank);		// processor label
+	MPI_Comm_rank(MPI_COMM_WORLD,&numtasks);	// # of using processors
+	MPI_Status status;
+
+	// iteration ... each iter transfers data into the master processor
+
+	for(int i=0;i<NUM_ITER;i++)
+	{
+		if( rank == 1 )
+		{	
+			tmp_prc_1 = (double*)calloc(MPI_BUFFER,sizeof(double));
+			
+			for(int j=0;j<MPI_BUFFER;j++)
+				tmp_prc_1[j] = j;
+			
+			printf("Send Start %d\n",i+1);
+			MPI_Ssend(tmp_prc_1, MPI_BUFFER, MPI_DOUBLE, 0, i, MPI_COMM_WORLD);
+			// for sync send, if its matchin Recv is not called, the process will be stopped
+			printf("Send Done %d\n",i+1);
+	
+			// This is Standard Blocking MPI_Send()
+			// the method returns after the end of MPI_Recv()	!!
+			//
+			//
+			//	CAUTION !!
+			//
+			//	the used method MPI_Send() <-> MPI_Recv is '(Standard)Blocking Comm' 
+			//
+			//	the process is blocked until the communication ends
+			//
+			//	process may be slowed down
+			//
+			free(tmp_prc_1);
+		}
+	}	
+
+	// Recv all at once ... timed recv	// KEY: Matching the 'COMM_TAG' and SRC - DEST
+	
+	if( rank == 0 )
+	{	
+
+		fp = fopen("MultiRecv.out","w");
+
+		tmp_prc_0 = (double*)calloc(MPI_BUFFER*NUM_ITER,sizeof(double));
+		
+		for(int i=0;i<NUM_ITER;i++)
+		{
+			if( i == 0 )
+			{	MPI_Recv(&tmp_prc_0[NUM_ITER*i], MPI_BUFFER, MPI_DOUBLE, 1, i, MPI_COMM_WORLD, &status);
+				MPI_Get_count(&status,MPI_DOUBLE,&mpi_count);
+				// Recv data in the each iteration ... MPI_COMM_TAG must be in matching
+				printf("src: %d -> dest: %d\t Recv %d elements... TAG: %d\n",status.MPI_SOURCE,rank,mpi_count,status.MPI_TAG);
+
+				for(int i=0;i<MPI_BUFFER;i++)
+					fprintf(fp,"%lf\n",tmp_prc_0[i]);
+				fflush(fp);
+			}
+			/* At Rank 1, there are 4 Message Sync Send. However, here there are only one Recv ... leads to DeadLock
+			 * 
+			 * After Recv, its done, otherwise halted
+			 */
+		}	
+
+
+		free(tmp_prc_0);
+		fclose(fp);
+
+	}
+	MPI_Finalize();
+
+	return 0;
+}

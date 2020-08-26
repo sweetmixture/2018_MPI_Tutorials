@@ -1,0 +1,1 @@
+/Users/SSAKKIE/Programming/MPI/MPI-TEXT-2018/4Ch_Collective/9_Param_Gather/makefile
